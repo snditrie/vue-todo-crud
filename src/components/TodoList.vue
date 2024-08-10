@@ -1,51 +1,310 @@
 <template>
-  <div>
-    <ul>
-      <li v-for="todo in todos" :key="todo.id">
-        <router-link :to="{ name: 'TodoDetail', params: { id: todo.id } }">
-          {{ todo.title }}
-        </router-link>
-        <button @click="edit(todo)">Edit</button>
-        <button @click="delete todo.id">Delete</button>
-      </li>
-    </ul>
-    <button :disabled="currentPage === 1" @click="previousPage">
-      Previous
-    </button>
-    <button :disabled="currentPage === totalPages" @click="nextPage">
-      Next
-    </button>
+  <div class="todo-container">
+    <h1 class="title">Todo List</h1>
+    <button @click="showAddModal = true" class="add-btn">Add Todo</button>
+
+    <table class="todo-table">
+      <thead>
+        <tr>
+          <th>No.</th>
+          <th>Todo</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="(todo, index) in todos" :key="todo.id">
+          <td>{{ (page - 1) * limit + index + 1 }}</td>
+          <td>{{ todo.title }}</td>
+          <td>
+            <button class="edit-btn" @click="openEditModal(todo)">Edit</button>
+            <button class="delete-btn" @click="deleteTodo(todo.id)">
+              Delete
+            </button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="pagination">
+      <button class="prev-btn" @click="loadPrevious" :disabled="page === 1">
+        Previous
+      </button>
+      <button
+        class="next-btn"
+        @click="loadNext"
+        :disabled="todos.length < limit"
+      >
+        Next
+      </button>
+    </div>
+
+    <div v-if="showAddModal" class="modal-overlay" @click.self="closeAddModal">
+      <div class="modal-content">
+        <h2>Add Todo</h2>
+        <TodoForm :todo="newTodo" :buttonText="'Add Todo'" @submit="addTodo" />
+        <button class="close-btn" @click="closeAddModal">Close</button>
+      </div>
+    </div>
+
+    <div
+      v-if="showEditModal"
+      class="modal-overlay"
+      @click.self="closeEditModal"
+    >
+      <div class="modal-content">
+        <h2>Edit Todo</h2>
+        <TodoForm
+          :todo="newTodo"
+          :buttonText="'Update Todo'"
+          @submit="updateTodo"
+        />
+        <button class="close-btn" @click="closeEditModal">Close</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { mapGetters, mapActions } from "vuex";
+import axios from "axios";
+import TodoForm from "./TodoForm.vue";
 
 export default {
-  computed: {
-    ...mapGetters(["todos", "currentPage", "totalPages"]),
+  name: "TodoList",
+  components: {
+    TodoForm,
+  },
+  data() {
+    return {
+      todos: [],
+      newTodo: { title: "" },
+      page: 1,
+      limit: 10,
+      editIndex: -1,
+      showAddModal: false,
+      showEditModal: false,
+    };
   },
   methods: {
-    ...mapActions(["fetchTodos", "deleteTodo"]),
-    async edit(todo) {
-      this.$router.push({ name: "EditTodo", params: { id: todo.id } });
+    fetchTodos() {
+      axios
+        .get(
+          `https://jsonplaceholder.typicode.com/todos?_page=${this.page}&_limit=${this.limit}`
+        )
+        .then((response) => {
+          this.todos = response.data;
+        });
     },
-    async delete(id) {
-      await this.deleteTodo(id);
+    addTodo(todo) {
+      if (!todo || !todo.title || !todo.title.trim()) {
+        return;
+      }
+      axios
+        .post("https://jsonplaceholder.typicode.com/todos", todo)
+        .then((response) => {
+          this.todos.unshift(response.data);
+          this.newTodo = { title: "" };
+          this.showAddModal = false;
+        })
+        .catch((error) => {
+          console.error(
+            "Error during creation:",
+            error.response || error.message
+          );
+          alert("Failed to create todo. Please try again.");
+        });
     },
-    async previousPage() {
-      if (this.currentPage > 1) {
-        await this.fetchTodos({ page: this.currentPage - 1, limit: 10 });
+    openEditModal(todo) {
+      this.newTodo = { ...todo };
+      this.editIndex = this.todos.indexOf(todo);
+      this.showEditModal = true;
+    },
+    updateTodo(todo) {
+      if (!todo || !todo.id || !todo.title.trim()) {
+        return;
+      }
+
+      axios
+        .delete(`https://jsonplaceholder.typicode.com/todos/${todo.id}`)
+        .then(() => {
+          return axios.post("https://jsonplaceholder.typicode.com/todos", todo);
+        })
+        .then((response) => {
+          this.todos.splice(this.editIndex, 1, response.data);
+          this.newTodo = { title: "" };
+          this.editIndex = -1;
+          this.showEditModal = false;
+        })
+        .catch((error) => {
+          console.error(
+            "Error during update:",
+            error.response || error.message
+          );
+          alert("Failed to update todo. Please try again.");
+        });
+    },
+    deleteTodo(id) {
+      axios
+        .delete(`https://jsonplaceholder.typicode.com/todos/${id}`)
+        .then(() => {
+          this.todos = this.todos.filter((todo) => todo.id !== id);
+        })
+        .catch((error) => {
+          console.error(
+            "Error during deletion:",
+            error.response || error.message
+          );
+          alert("Failed to delete todo. Please try again.");
+        });
+    },
+    loadPrevious() {
+      if (this.page > 1) {
+        this.page--;
+        this.fetchTodos();
       }
     },
-    async nextPage() {
-      if (this.currentPage < this.totalPages) {
-        await this.fetchTodos({ page: this.currentPage + 1, limit: 10 });
-      }
+    loadNext() {
+      this.page++;
+      this.fetchTodos();
+    },
+    closeAddModal() {
+      this.showAddModal = false;
+      this.newTodo = { title: "" };
+    },
+    closeEditModal() {
+      this.showEditModal = false;
+      this.newTodo = { title: "" };
+      this.editIndex = -1;
     },
   },
-  created() {
-    this.fetchTodos({ page: 1, limit: 10 });
+  mounted() {
+    this.fetchTodos();
   },
 };
 </script>
+
+<style scoped>
+.todo-container {
+  width: 80%;
+  margin: 0 auto;
+  background-color: #f7f7f7;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.title {
+  text-align: center;
+  font-size: 2em;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.todo-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+  margin-bottom: 20px;
+}
+
+.todo-table th,
+.todo-table td {
+  padding: 12px;
+  border: 1px solid #ddd;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.todo-table th {
+  background-color: #f4f4f4;
+}
+
+.add-btn,
+.edit-btn,
+.delete-btn,
+.close-btn {
+  padding: 8px 12px;
+  margin: 0 4px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.add-btn {
+  background-color: #4caf50;
+  color: white;
+  margin-bottom: 20px;
+}
+
+.edit-btn {
+  background-color: #4caf50;
+  color: white;
+}
+
+.delete-btn {
+  background-color: #f44336;
+  color: white;
+}
+
+.add-btn:hover,
+.edit-btn:hover,
+.delete-btn:hover,
+.close-btn:hover {
+  opacity: 0.8;
+}
+
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.prev-btn,
+.next-btn {
+  padding: 10px 20px;
+  background-color: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1em;
+  cursor: pointer;
+}
+
+.prev-btn:hover,
+.next-btn:hover {
+  background-color: #1976d2;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  width: 80%;
+  max-width: 500px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.close-btn {
+  background-color: #f44336;
+  color: white;
+  margin-top: 10px;
+  display: block;
+  width: 100%;
+  padding: 10px;
+}
+</style>

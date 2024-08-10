@@ -1,12 +1,22 @@
 <template>
   <div>
-    <h1>Welcome to Todo App</h1>
-    <router-link to="/todos">Go to Todos</router-link>
+    <TodoList />
   </div>
 </template>
 
 <script>
+import TodoList from "@/components/TodoList.vue";
+
 export default {
-  name: "Home",
+  name: "HomePage",
+  components: {
+    TodoList,
+  },
 };
 </script>
+
+<style scoped>
+h1 {
+  margin-bottom: 20px;
+}
+</style>
